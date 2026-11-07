@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { ApplicationFormState } from "@/lib/actions/applications";
 import { STATUS_LABELS } from "@/lib/domain/application-status";
 import type { ApplicationFormValues } from "@/lib/validation/application";
+import { JobDescriptionField } from "./job-description-field";
 import { StatusSelectContent } from "./status-select-content";
 
 type FormAction = (state: ApplicationFormState, formData: FormData) => Promise<ApplicationFormState>;
@@ -73,16 +74,7 @@ export function ApplicationForm({ action, defaultValues, submitLabel, cancelHref
         </Field>
       </div>
 
-      <Field
-        id="jobDescriptionText"
-        label="Annonstext"
-        errors={errors.jobDescriptionText}
-        hint="Klistra in hela annonsen – används för AI-matchningen."
-      >
-        {(p) => (
-          <Textarea {...p} name="jobDescriptionText" rows={10} defaultValue={values.jobDescriptionText} className="font-mono text-xs" />
-        )}
-      </Field>
+      <JobDescriptionField defaultValue={values.jobDescriptionText} errors={errors.jobDescriptionText} />
 
       <Field id="notes" label="Anteckningar" errors={errors.notes}>
         {(p) => <Textarea {...p} name="notes" rows={4} defaultValue={values.notes} />}

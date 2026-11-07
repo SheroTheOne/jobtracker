@@ -1,12 +1,11 @@
 import "server-only";
 
 /**
- * Plockar ut text ur ett uppladdat CV. Sker lokalt på servern – inget skickas vidare.
+ * Plockar ut text ur ett uppladdat dokument (CV eller annons). Sker lokalt på servern – inget skickas vidare.
  * Stöd: PDF (unpdf), Word .docx (mammoth), Markdown och ren text.
  */
 
-export const CV_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
-export const CV_UPLOAD_ACCEPT = ".pdf,.docx,.md,.markdown,.txt";
+import { UPLOAD_MAX_BYTES } from "./constants";
 
 const MIN_TEXT_LENGTH = 50;
 
@@ -47,9 +46,9 @@ async function readDocx(bytes: Uint8Array): Promise<string> {
 
 export type ExtractResult = { ok: true; text: string } | { ok: false; error: string };
 
-export async function extractCvText(file: File): Promise<ExtractResult> {
+export async function extractDocumentText(file: File): Promise<ExtractResult> {
   if (file.size === 0) return { ok: false, error: "Filen är tom." };
-  if (file.size > CV_UPLOAD_MAX_BYTES) return { ok: false, error: "Filen är för stor (max 5 MB)." };
+  if (file.size > UPLOAD_MAX_BYTES) return { ok: false, error: "Filen är för stor (max 5 MB)." };
 
   const kind = detectKind(file);
   if (!kind) {
@@ -62,7 +61,7 @@ export async function extractCvText(file: File): Promise<ExtractResult> {
     const bytes = new Uint8Array(await file.arrayBuffer());
     raw = kind === "pdf" ? await readPdf(bytes) : kind === "docx" ? await readDocx(bytes) : new TextDecoder("utf-8").decode(bytes);
   } catch (error) {
-    console.error("[cv/extract-text]", kind, error);
+    console.error("[documents/extract-text]", kind, error);
     return { ok: false, error: "Filen kunde inte läsas. Är den skadad eller lösenordsskyddad?" };
   }
 
@@ -72,7 +71,7 @@ export async function extractCvText(file: File): Promise<ExtractResult> {
       ok: false,
       error:
         kind === "pdf"
-          ? "Ingen text hittades i PDF:en – den är troligen inskannad som bild. Exportera CV:t som text-PDF eller Word."
+          ? "Ingen text hittades i PDF:en – den är troligen inskannad som bild. Exportera dokumentet som text-PDF eller Word."
           : "Filen innehåller för lite text.",
     };
   }

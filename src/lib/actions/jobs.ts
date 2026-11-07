@@ -5,6 +5,7 @@ import { z } from "zod";
 import { importApplication } from "@/lib/data/applications";
 import { formatDate } from "@/lib/dates";
 import { JobSourceError, PLATSBANKEN_SOURCE, getJobAd, type JobAd } from "@/lib/jobs/platsbanken";
+import { parsePlatsbankenAdId } from "@/lib/jobs/platsbanken-url";
 import { runMatchForApplication } from "@/lib/match/run-match";
 
 export type ImportJobResult =
@@ -32,10 +33,25 @@ export async function importJobAction(adId: string, mode: string): Promise<Impor
   const parsedId = adIdSchema.safeParse(adId);
   const parsedMode = modeSchema.safeParse(mode);
   if (!parsedId.success || !parsedMode.success) return { ok: false, error: "Ogiltig förfrågan." };
+  return importAd(parsedId.data, parsedMode.data);
+}
 
+/** Importerar från en inklistrad Platsbanken-länk (eller ett annons-id). */
+export async function importJobFromUrlAction(url: string): Promise<ImportJobResult> {
+  const adId = typeof url === "string" ? parsePlatsbankenAdId(url) : null;
+  if (!adId) {
+    return {
+      ok: false,
+      error: "Känner inte igen länken. Den ska se ut som arbetsformedlingen.se/platsbanken/annonser/12345678.",
+    };
+  }
+  return importAd(adId, "save");
+}
+
+async function importAd(adId: string, mode: z.infer<typeof modeSchema>): Promise<ImportJobResult> {
   let ad: JobAd;
   try {
-    ad = await getJobAd(parsedId.data);
+    ad = await getJobAd(adId);
   } catch (error) {
     return { ok: false, error: error instanceof JobSourceError ? error.message : "Kunde inte hämta annonsen." };
   }
@@ -58,7 +74,7 @@ export async function importJobAction(adId: string, mode: string): Promise<Impor
 
   revalidatePath("/", "layout");
   const base = { ok: true as const, applicationId: imported.id, alreadySaved: !imported.created };
-  if (parsedMode.data === "save") return base;
+  if (mode === "save") return base;
 
   const match = await runMatchForApplication(imported.id);
   return match.ok ? { ...base, score: match.score } : { ...base, matchError: match.error };

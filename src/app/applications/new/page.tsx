@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ApplicationForm } from "@/components/applications/application-form";
+import { PlatsbankenLinkImport } from "@/components/jobs/platsbanken-link-import";
 import { PageHeader } from "@/components/layout/page-header";
 import { createApplicationAction } from "@/lib/actions/applications";
 import type { ApplicationFormValues } from "@/lib/validation/application";
@@ -21,6 +22,12 @@ export default function NewApplicationPage() {
   return (
     <>
       <PageHeader title="Ny ansökan" description="Spara en annons eller registrera en ansökan du har skickat." />
+      <PlatsbankenLinkImport />
+      <div className="text-muted-foreground flex items-center gap-3 text-xs">
+        <span className="h-px flex-1 bg-border" />
+        eller fyll i manuellt
+        <span className="h-px flex-1 bg-border" />
+      </div>
       <ApplicationForm
         action={createApplicationAction}
         defaultValues={EMPTY_VALUES}

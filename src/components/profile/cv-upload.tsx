@@ -5,10 +5,9 @@ import { FileUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "cn";
 import { uploadCvAction, type CvUploadResult } from "@/lib/actions/profile";
+import { UPLOAD_ACCEPT } from "@/lib/documents/constants";
 
 type UploadSuccess = Extract<CvUploadResult, { ok: true }>;
-
-const ACCEPT = ".pdf,.docx,.md,.markdown,.txt";
 
 export function CvUpload({ onLoaded }: { onLoaded: (result: UploadSuccess) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -72,7 +71,7 @@ export function CvUpload({ onLoaded }: { onLoaded: (result: UploadSuccess) => vo
       <input
         ref={inputRef}
         type="file"
-        accept={ACCEPT}
+        accept={UPLOAD_ACCEPT}
         className="sr-only"
         tabIndex={-1}
         aria-hidden

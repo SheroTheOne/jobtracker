@@ -25,6 +25,9 @@ Jag bygger appen för att använda den i mitt eget jobbsökande. Projektet är o
 - [x] Ladda upp CV som PDF, Word, Markdown eller text – profilen fylls i automatiskt med AI
 - [x] Sök annonser i Arbetsförmedlingens Platsbanken med gratis snabbmatchning mot mina kompetenser
 - [x] Spara en annons som ansökan med ett klick, med eller utan AI-matchning
+- [x] Dölja seniora roller i sökningen (standard för juniora profiler)
+- [x] Hämta en annons genom att klistra in en Platsbanken-länk
+- [x] Ladda upp annonstext som PDF, Word eller text
 
 ### AI-funktioner
 
@@ -45,7 +48,7 @@ AI:n ger underlag och förslag. Det är alltid användaren som bedömer resultat
 
 ### Jobbsökning
 
-Annonser hämtas från Arbetsförmedlingens öppna [JobSearch-API](https://jobsearch.api.jobtechdev.se) (samma annonser som Platsbanken, ingen nyckel krävs). Varje annons får en **snabbmatchning** – hur många av profilens kompetenser som nämns – som räknas lokalt utan AI-anrop. Indeed och liknande saknar öppna API:er och tillåter inte skrapning, så de stöds inte.
+Annonser hämtas från Arbetsförmedlingens öppna [JobSearch-API](https://jobsearch.api.jobtechdev.se) (samma annonser som Platsbanken, ingen nyckel krävs). Varje annons får en **snabbmatchning** – hur många av profilens kompetenser som nämns – som räknas lokalt utan AI-anrop. Seniora roller filtreras på titeln lokalt – inte med minusord mot API:t, eftersom de matchar hela annonstexten och då slår bort junior-vänliga annonser som nämner "seniora kollegor". Indeed och liknande saknar öppna API:er och tillåter inte skrapning, så de stöds inte.
 
 ### Uppföljningslogik
 

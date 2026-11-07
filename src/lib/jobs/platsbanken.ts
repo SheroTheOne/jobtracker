@@ -90,7 +90,7 @@ async function request<T>(path: string, schema: z.ZodType<T>): Promise<T> {
 }
 
 export async function searchJobs(query: string, offset = 0): Promise<JobSearchResult> {
-  const params = new URLSearchParams({ q: query, limit: String(PAGE_SIZE), offset: String(offset) });
+  const params = new URLSearchParams({ q: query.trim(), limit: String(PAGE_SIZE), offset: String(offset) });
   const data = await request(`/search?${params}`, searchResponseSchema);
   return { total: data.total.value, ads: data.hits.map(toJobAd) };
 }

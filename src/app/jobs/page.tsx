@@ -11,7 +11,14 @@ import { cn } from "cn";
 import { findImportedApplications } from "@/lib/data/applications";
 import { getProfile, type Profile } from "@/lib/data/profile";
 import { quickMatch } from "@/lib/domain/quick-match";
-import { JobSourceError, PAGE_SIZE, PLATSBANKEN_SOURCE, searchJobs, type JobSearchResult } from "@/lib/jobs/platsbanken";
+import { isSeniorTitle } from "@/lib/domain/seniority-filter";
+import {
+  JobSourceError,
+  PAGE_SIZE,
+  PLATSBANKEN_SOURCE,
+  searchJobs,
+  type JobSearchResult,
+} from "@/lib/jobs/platsbanken";
 
 export const metadata: Metadata = { title: "Hitta jobb" };
 
@@ -46,6 +53,10 @@ async function JobSearch({ searchParams }: { searchParams: SearchParams }) {
   const query = (firstString(params.q) ?? defaultQuery(profile)).trim().slice(0, 200);
   const page = Math.max(1, Math.min(Number.parseInt(firstString(params.page) ?? "1", 10) || 1, 50));
   const sortByMatch = firstString(params.sort) === "match";
+  // Standard: dölj seniora roller för juniora profiler. Kan alltid växlas i URL:en.
+  const seniorParam = firstString(params.senior);
+  const hideSenior = seniorParam ? seniorParam === "hide" : profile?.seniority === "JUNIOR";
+  const view: SearchView = { query, page, sortByMatch, hideSenior };
 
   return (
     <div className="grid gap-6">
@@ -62,8 +73,8 @@ async function JobSearch({ searchParams }: { searchParams: SearchParams }) {
       <SearchForm query={query} suggestions={profile?.targetRoles ?? []} />
 
       {query ? (
-        <Suspense key={`${query}-${page}-${sortByMatch}`} fallback={<ResultsSkeleton />}>
-          <Results query={query} page={page} sortByMatch={sortByMatch} profile={profile} />
+        <Suspense key={JSON.stringify(view)} fallback={<ResultsSkeleton />}>
+          <Results view={view} profile={profile} />
         </Suspense>
       ) : (
         <p className="text-muted-foreground text-sm">Skriv en roll, teknik eller ort för att söka.</p>
@@ -97,24 +108,25 @@ function SearchForm({ query, suggestions }: { query: string; suggestions: readon
   );
 }
 
-function pageHref(query: string, page: number, sortByMatch: boolean): string {
-  const params = new URLSearchParams({ q: query });
-  if (page > 1) params.set("page", String(page));
-  if (sortByMatch) params.set("sort", "match");
-  return `/jobs?${params}`;
-}
-
-async function Results({
-  query,
-  page,
-  sortByMatch,
-  profile,
-}: {
+interface SearchView {
   query: string;
   page: number;
   sortByMatch: boolean;
-  profile: Profile | null;
-}) {
+  hideSenior: boolean;
+}
+
+/** Bygger URL för en vy; ändrade filter (allt utom page) börjar om på sida 1. */
+function viewHref(view: SearchView, change: Partial<SearchView> = {}): string {
+  const next = { ...view, ...change, page: change.page ?? (Object.keys(change).length ? 1 : view.page) };
+  const params = new URLSearchParams({ q: next.query });
+  if (next.page > 1) params.set("page", String(next.page));
+  if (next.sortByMatch) params.set("sort", "match");
+  params.set("senior", next.hideSenior ? "hide" : "show");
+  return `/jobs?${params}`;
+}
+
+async function Results({ view, profile }: { view: SearchView; profile: Profile | null }) {
+  const { query, page, sortByMatch, hideSenior } = view;
   let result: JobSearchResult;
   try {
     result = await searchJobs(query, (page - 1) * PAGE_SIZE);
@@ -142,7 +154,10 @@ async function Results({
     result.ads.map((ad) => ad.id),
   );
   const now = new Date();
-  const items = result.ads.map((ad) => ({
+  // Filtreras på titeln lokalt (se seniority-filter.ts för varför inte i API:t).
+  const visibleAds = hideSenior ? result.ads.filter((ad) => !isSeniorTitle(ad.title)) : result.ads;
+  const hiddenCount = result.ads.length - visibleAds.length;
+  const items = visibleAds.map((ad) => ({
     ad,
     quick: profile ? quickMatch(profile.coreSkills, `${ad.title}\n${ad.description}`) : null,
   }));
@@ -155,18 +170,33 @@ async function Results({
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <p className="text-muted-foreground">
           {result.total.toLocaleString("sv-SE")} annonser · sida {page} av {totalPages}
+          {hiddenCount > 0 && ` · ${hiddenCount} seniora dolda`}
         </p>
-        {profile && (
-          <div className="flex gap-1">
-            <SortLink href={pageHref(query, page, false)} active={!sortByMatch}>
-              Relevans
-            </SortLink>
-            <SortLink href={pageHref(query, page, true)} active={sortByMatch}>
-              Bäst match
-            </SortLink>
-          </div>
-        )}
+        <div className="flex flex-wrap gap-1">
+          <SortLink href={viewHref(view, { hideSenior: !hideSenior })} active={hideSenior}>
+            Dölj seniora roller
+          </SortLink>
+          {profile && (
+            <>
+              <SortLink href={viewHref(view, { sortByMatch: false })} active={!sortByMatch}>
+                Relevans
+              </SortLink>
+              <SortLink href={viewHref(view, { sortByMatch: true })} active={sortByMatch}>
+                Bäst match
+              </SortLink>
+            </>
+          )}
+        </div>
       </div>
+
+      {items.length === 0 && (
+        <p className="text-muted-foreground rounded-xl border border-dashed p-6 text-center text-sm">
+          Alla annonser på den här sidan är seniora roller.{" "}
+          <Link href={viewHref(view, { hideSenior: false })} className="text-primary underline-offset-4 hover:underline">
+            Visa dem ändå
+          </Link>
+        </p>
+      )}
 
       <div className="grid gap-3">
         {items.map(({ ad, quick }) => (
@@ -183,14 +213,14 @@ async function Results({
 
       <nav aria-label="Sidor" className="flex justify-between">
         {page > 1 ? (
-          <Link href={pageHref(query, page - 1, sortByMatch)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <Link href={viewHref(view, { page: page - 1 })} className={buttonVariants({ variant: "outline", size: "sm" })}>
             Föregående
           </Link>
         ) : (
           <span />
         )}
         {page < totalPages && (
-          <Link href={pageHref(query, page + 1, sortByMatch)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <Link href={viewHref(view, { page: page + 1 })} className={buttonVariants({ variant: "outline", size: "sm" })}>
             Nästa
           </Link>
         )}

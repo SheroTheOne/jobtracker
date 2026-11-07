@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { suggestProfileFromCv, type ProfileSuggestion } from "@/lib/ai/extract-profile";
-import { extractCvText } from "@/lib/cv/extract-text";
+import { extractDocumentText } from "@/lib/documents/extract-text";
 import { upsertProfile } from "@/lib/data/profile";
 import {
   CV_MAX_LENGTH,
@@ -56,7 +56,7 @@ export async function uploadCvAction(formData: FormData): Promise<CvUploadResult
   const file = formData.get("file");
   if (!(file instanceof File)) return { ok: false, error: "Ingen fil valdes." };
 
-  const extracted = await extractCvText(file);
+  const extracted = await extractDocumentText(file);
   if (!extracted.ok) return extracted;
 
   const suggestion = await suggestProfileFromCv(extracted.text);
