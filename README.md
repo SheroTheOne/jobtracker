@@ -2,7 +2,7 @@
 
 En webbapp för att hålla koll på jobbansökningar och få AI-hjälp att jämföra jobbannonser med sitt CV.
 
-> **Status:** Projektet är i planeringsfasen. Ingen av funktionerna nedan är byggd ännu.
+> **Status:** Under utveckling. Ansökningar, profil och AI-matchning fungerar.
 
 ## Idén
 
@@ -12,35 +12,95 @@ jobtracker samlar ansökningarna på ett ställe och använder AI för att ta fr
 
 Jag bygger appen för att använda den i mitt eget jobbsökande. Projektet är också en del av min portfolio och visar hur jag arbetar med AI som utvecklingsverktyg.
 
-## Planerade funktioner
+## Funktioner
 
 ### Grundfunktioner
 
-- [ ] Lägga till, redigera och ta bort ansökningar
-- [ ] Spara företag, roll, länk till annons, datum och anteckningar
-- [ ] Följa status: sparad, sökt, intervju, erbjudande eller avslag
-- [ ] Filtrera och sortera ansökningar
-- [ ] Se vilka ansökningar som behöver följas upp
+- [x] Lägga till, redigera och ta bort ansökningar
+- [x] Spara företag, roll, länk till annons, datum och anteckningar
+- [x] Följa status: sparad, sökt, intervju, erbjudande eller avslag
+- [x] Filtrera och sortera ansökningar
+- [x] Se vilka ansökningar som behöver följas upp
+- [x] Profil med CV, kärnkompetenser, senioritet och roller jag söker
 
 ### AI-funktioner
 
-- [ ] Klistra in en jobbannons och få ut krav och nyckelord
-- [ ] Jämföra annonsens krav med CV:t
-- [ ] Visa vilka krav som matchar och vad som saknas
+- [x] Klistra in en jobbannons och få ut krav, tech-stack och nyckelord
+- [x] Jämföra annonsens krav med CV:t, med hänvisning till var i CV:t kravet syns
+- [x] Visa vad som saknas, uppdelat i kritiska och meriterande krav
+- [x] Matchningspoäng (0–100 %) och ett utkast till pitch för personligt brev eller intervju
 
 AI:n ger underlag och förslag. Det är alltid användaren som bedömer resultatet och bestämmer vad som ska göras.
 
-## Planerad teknik
+### Så fungerar matchningen
 
-- **Frontend:** React
-- **Backend:** Node.js
-- **Databas:** MongoDB
+- **Typad output:** Modellen tvingas svara enligt ett Zod-schema ([`match-analysis.ts`](src/lib/ai/schemas/match-analysis.ts)) via AI SDK:s `Output.object`, och svaret valideras igen innan det sparas.
+- **Verifierade belägg:** Varje matchat krav måste citera CV:t ordagrant. Citatet kontrolleras i kod; overifierade citat markeras och ger lägre poäng.
+- **Poängen räknas i kod, inte av AI:n:** krav väger 3, meriterande 1; starkt uppfyllt ger full vikt, delvis eller overifierat halv ([`match-scoring.ts`](src/lib/domain/match-scoring.ts)).
+- **Spårbarhet:** Varje rapport sparas med modell, promptversion och ett fingeravtryck av CV:t, så appen kan säga till när CV:t ändrats sedan analysen.
+- **Testläge:** Med `AI_PROVIDER="mock"` returneras ett exempelsvar – hela flödet kan utvecklas utan nyckel eller kostnad.
 
-Valet av AI-tjänst är inte gjort ännu.
+### Uppföljningslogik
+
+En ansökan flaggas för uppföljning när den har status _Sökt_ eller _Intervju_ och
+
+- en manuellt satt påminnelse har passerats, eller
+- det saknas påminnelse och det har gått **mer än 7 dagar** sedan senaste kontakt (eller ansökningsdatum om ingen kontakt loggats).
+
+Statusändringar räknas som kontakt. Reglerna är rena funktioner i [`src/lib/domain/follow-up.ts`](src/lib/domain/follow-up.ts) och täcks av enhetstester.
+
+## Teknik
+
+| Del            | Val                                                              |
+| -------------- | ---------------------------------------------------------------- |
+| Ramverk        | Next.js 16 (App Router, Server Actions, Cache Components)        |
+| Språk          | TypeScript (strict)                                              |
+| UI             | Tailwind CSS v4, shadcn/ui (Base UI), Lucide-ikoner              |
+| Databas        | Prisma 7 – SQLite lokalt, PostgreSQL i produktion                |
+| Validering     | Zod 4                                                            |
+| AI             | Vercel AI SDK med Google Gemini (gratisnivå) och Zod-scheman för typad JSON |
+| Tester         | Vitest                                                           |
+
+### Arkitektur
+
+```
+src/
+├── app/                # Routes – tunna sidor som komponerar komponenter
+├── components/         # UI, uppdelat per domän (applications/, profile/, layout/, ui/)
+└── lib/
+    ├── actions/        # Server Actions: validera → anropa data/ → revalidera
+    ├── data/           # All databasåtkomst (enda lagret som pratar med Prisma)
+    ├── domain/         # Ren affärslogik utan beroenden – enhetstestad
+    ├── validation/     # Zod-scheman för formulär och Json-kolumner
+    ├── ai/             # AI-anrop, prompter, scheman, felhantering och testläge
+    └── db/             # Prisma-klient
+```
+
+UI anropar bara `actions/`. Bara `data/` når databasen. `ai/` vet ingenting om databasen.
+
+## Kom igång
+
+Kräver Node.js 22+.
+
+```bash
+npm install
+cp .env.example .env      # AI_PROVIDER="mock" fungerar direkt; för Gemini: lägg in nyckel och sätt "google"
+npx prisma migrate dev    # skapar den lokala SQLite-databasen
+npm run db:seed           # (valfritt) exempelansökningar – körs bara om databasen är tom
+npm run dev               # http://localhost:3000
+```
+
+| Script              | Gör                                   |
+| ------------------- | ------------------------------------- |
+| `npm run dev`       | Startar utvecklingsservern            |
+| `npm test`          | Kör enhetstester                      |
+| `npm run typecheck` | TypeScript-kontroll                   |
+| `npm run lint`      | ESLint                                |
+| `npm run db:studio` | Öppnar Prisma Studio för att se datan |
 
 ## Så används AI i projektet
 
 Jag använder AI som stöd under utvecklingen och dokumenterar här hur det går till. Avsnittet uppdateras allt eftersom projektet växer.
 
 - **Verktyg:** Claude Code
-
+- **Arbetssätt:** Projektet byggs modul för modul. För varje modul presenterar AI:n en plan, skriver koden och verifierar den (typkontroll, tester, bygge) innan jag granskar och godkänner nästa steg.

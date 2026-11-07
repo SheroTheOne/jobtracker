@@ -1,0 +1,94 @@
+// jobtracker – datamodell
+//
+// Portabilitet: schemat ska fungera på både SQLite (lokal dev) och PostgreSQL
+// (produktion) genom att bara byta `provider`. Därför undviks Postgres-specifika
+// typer (String[], @db.*). Listor och AI-resultat lagras som Json och valideras
+// med Zod-scheman i src/lib/validation respektive src/lib/ai/schemas.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum ApplicationStatus {
+  SAVED
+  APPLIED
+  INTERVIEW
+  OFFER
+  REJECTED
+}
+
+enum SeniorityLevel {
+  JUNIOR
+  MID
+  SENIOR
+  LEAD
+  PRINCIPAL
+}
+
+// ─── Profil / CV ────────────────────────────────────────────────────────────
+
+// Enanvändarapp: exakt en rad förväntas. Dataåtkomstlagret (getProfile/upsertProfile)
+// ansvarar för att garantera det.
+model Profile {
+  id          String         @id @default(cuid())
+  fullName    String?
+  headline    String?
+  cvText      String // CV i markdown eller ren text
+  coreSkills  Json // string[]  – valideras med Zod
+  targetRoles Json // string[]  – valideras med Zod
+  seniority   SeniorityLevel
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+// ─── Ansökningar ────────────────────────────────────────────────────────────
+
+model JobApplication {
+  id                 String            @id @default(cuid())
+  company            String
+  role               String
+  url                String?
+  jobDescriptionText String?
+  status             ApplicationStatus @default(SAVED)
+  appliedDate        DateTime?
+  followUpDate       DateTime? // manuellt satt påminnelse
+  lastContactAt      DateTime? // senaste kontakt (mejl, samtal, statusändring)
+  notes              String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  matchReports MatchReport[]
+
+  // "Behöver uppföljning" lagras INTE – det härleds i src/lib/domain/follow-up.ts:
+  // status ∈ {APPLIED, INTERVIEW} och (lastContactAt ?? appliedDate) > 7 dagar sedan,
+  // eller followUpDate har passerats.
+
+  @@index([status])
+  @@index([followUpDate])
+}
+
+// ─── AI-matchning ───────────────────────────────────────────────────────────
+
+// Historik: varje körning sparas, så att man kan jämföra efter att CV:t uppdaterats.
+model MatchReport {
+  id            String         @id @default(cuid())
+  applicationId String
+  application   JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  score          Int // 0–100, denormaliserad från analysis för sortering/filtrering
+  analysis       Json // MatchAnalysis (Zod) – krav, matchningar, luckor, pitch
+  schemaVersion  Int    @default(1) // bumpas när MatchAnalysis-schemat ändras
+  model          String // t.ex. "claude-sonnet-5-5" – spårbarhet
+  cvSnapshotHash String // sha256 av cvText vid analys → visa "inaktuell" om CV:t ändrats
+
+  createdAt DateTime @default(now())
+
+  @@index([applicationId, createdAt])
+}
