@@ -15,7 +15,7 @@ export default function ProfilePage() {
     <>
       <PageHeader
         title="Profil & CV"
-        description="Underlaget som jobbannonser matchas mot. Lagras bara i din lokala databas."
+        description="Ladda upp ditt CV så fylls profilen i automatiskt. Profilen sparas lokalt; CV-texten skickas till AI-tjänsten när fälten fylls i och vid matchning."
       />
       <Suspense fallback={<FormSkeleton />}>
         <ProfileSection />
@@ -40,7 +40,7 @@ async function ProfileSection() {
   return (
     <div className="grid gap-2">
       {profile && <p className="text-muted-foreground text-xs">Senast sparad {formatDate(profile.updatedAt)}</p>}
-      <ProfileForm defaultValues={toFormValues(profile)} />
+      <ProfileForm defaultValues={toFormValues(profile)} isNewProfile={profile === null} />
     </div>
   );
 }

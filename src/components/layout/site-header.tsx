@@ -5,6 +5,7 @@ import { NavLinks, StaticNavLinks, type NavItem } from "./nav-link";
 
 const NAV_ITEMS: readonly NavItem[] = [
   { href: "/", label: "Översikt", exact: true },
+  { href: "/jobs", label: "Hitta jobb" },
   { href: "/applications", label: "Ansökningar" },
   { href: "/profile", label: "Profil" },
 ];

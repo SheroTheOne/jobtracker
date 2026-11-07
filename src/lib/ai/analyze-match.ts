@@ -1,10 +1,9 @@
 import "server-only";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText, Output } from "ai";
 import { computeMatchScore, isEvidenceInCv } from "@/lib/domain/match-scoring";
-import { getAiConfig } from "./config";
 import { classifyAiError, type AiFailure } from "./errors";
 import { createMockAnalysis } from "./mock";
+import { mockDelay, resolveModel } from "./provider";
 import { MATCH_PROMPT_VERSION, MATCH_SYSTEM_PROMPT, buildMatchPrompt, type MatchPromptInput } from "./prompts/match";
 import { matchAnalysisSchema, type MatchAnalysis, type StoredMatchAnalysis } from "./schemas/match-analysis";
 
@@ -21,16 +20,15 @@ export interface MatchResult {
 export type AnalyzeMatchResult = { ok: true; value: MatchResult } | { ok: false; error: AiFailure };
 
 async function generateAnalysis(input: MatchPromptInput): Promise<{ analysis: MatchAnalysis; modelId: string }> {
-  const config = getAiConfig();
+  const resolved = resolveModel();
 
-  if (config.provider === "mock") {
-    await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
+  if (resolved.kind === "mock") {
+    await mockDelay(MOCK_DELAY_MS);
     return { analysis: createMockAnalysis({ cvText: input.cvText, role: input.job.role }), modelId: "mock" };
   }
 
-  const google = createGoogleGenerativeAI({ apiKey: config.apiKey });
   const { output } = await generateText({
-    model: google(config.modelId),
+    model: resolved.model,
     system: MATCH_SYSTEM_PROMPT,
     prompt: buildMatchPrompt(input),
     output: Output.object({ schema: matchAnalysisSchema, name: "match_analysis" }),
@@ -38,7 +36,7 @@ async function generateAnalysis(input: MatchPromptInput): Promise<{ analysis: Ma
     maxRetries: 2, // AI SDK gör omförsök med backoff vid 429/5xx
     abortSignal: AbortSignal.timeout(TIMEOUT_MS),
   });
-  return { analysis: output, modelId: `google:${config.modelId}` };
+  return { analysis: output, modelId: resolved.modelId };
 }
 
 /** Lägger till fält som härleds i kod: verifierade belägg och poäng. Ren funktion – testbar. */

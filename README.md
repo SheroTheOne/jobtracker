@@ -22,6 +22,9 @@ Jag bygger appen för att använda den i mitt eget jobbsökande. Projektet är o
 - [x] Filtrera och sortera ansökningar
 - [x] Se vilka ansökningar som behöver följas upp
 - [x] Profil med CV, kärnkompetenser, senioritet och roller jag söker
+- [x] Ladda upp CV som PDF, Word, Markdown eller text – profilen fylls i automatiskt med AI
+- [x] Sök annonser i Arbetsförmedlingens Platsbanken med gratis snabbmatchning mot mina kompetenser
+- [x] Spara en annons som ansökan med ett klick, med eller utan AI-matchning
 
 ### AI-funktioner
 
@@ -39,6 +42,10 @@ AI:n ger underlag och förslag. Det är alltid användaren som bedömer resultat
 - **Poängen räknas i kod, inte av AI:n:** krav väger 3, meriterande 1; starkt uppfyllt ger full vikt, delvis eller overifierat halv ([`match-scoring.ts`](src/lib/domain/match-scoring.ts)).
 - **Spårbarhet:** Varje rapport sparas med modell, promptversion och ett fingeravtryck av CV:t, så appen kan säga till när CV:t ändrats sedan analysen.
 - **Testläge:** Med `AI_PROVIDER="mock"` returneras ett exempelsvar – hela flödet kan utvecklas utan nyckel eller kostnad.
+
+### Jobbsökning
+
+Annonser hämtas från Arbetsförmedlingens öppna [JobSearch-API](https://jobsearch.api.jobtechdev.se) (samma annonser som Platsbanken, ingen nyckel krävs). Varje annons får en **snabbmatchning** – hur många av profilens kompetenser som nämns – som räknas lokalt utan AI-anrop. Indeed och liknande saknar öppna API:er och tillåter inte skrapning, så de stöds inte.
 
 ### Uppföljningslogik
 

@@ -117,3 +117,41 @@ export async function deleteApplication(id: string) {
 export function isRecordNotFound(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025";
 }
+
+// ─── Import från externa källor ──────────────────────────────────────────────
+
+export interface ImportApplicationInput {
+  source: string;
+  externalId: string;
+  company: string;
+  role: string;
+  url: string;
+  jobDescriptionText: string;
+  notes: string | null;
+}
+
+/** Returnerar map externalId → applicationId för annonser som redan importerats. */
+export async function findImportedApplications(source: string, externalIds: readonly string[]): Promise<Map<string, string>> {
+  await io();
+  if (externalIds.length === 0) return new Map();
+  const rows = await db.jobApplication.findMany({
+    where: { source, externalId: { in: [...externalIds] } },
+    select: { id: true, externalId: true },
+  });
+  return new Map(rows.flatMap((row) => (row.externalId ? [[row.externalId, row.id] as const] : [])));
+}
+
+/** Skapar en sparad ansökan från en extern annons. Idempotent: finns den redan returneras befintligt id. */
+export async function importApplication(input: ImportApplicationInput): Promise<{ id: string; created: boolean }> {
+  try {
+    const { id } = await db.jobApplication.create({ data: { ...input, status: "SAVED" }, select: { id: true } });
+    return { id, created: true };
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
+    const existing = await db.jobApplication.findUniqueOrThrow({
+      where: { source_externalId: { source: input.source, externalId: input.externalId } },
+      select: { id: true },
+    });
+    return { id: existing.id, created: false };
+  }
+}
