@@ -3,7 +3,7 @@ import { createEvidenceVerifier } from "@/lib/domain/evidence";
 import { computeMatchScore } from "@/lib/domain/match-scoring";
 import { reconcileRequirements } from "@/lib/domain/requirements";
 import { aiFailure, type AiFailure } from "./errors";
-import { generateStructured } from "./generate-structured";
+import { generateStructured, type TokenUsage } from "./generate-structured";
 import { createMockAnalysis } from "./mock";
 import { MATCH_PROMPT_VERSION, MATCH_SYSTEM_PROMPT, buildMatchPrompt, type MatchPromptInput } from "./prompts/match";
 import { matchAnalysisSchema, type MatchAnalysis, type StoredMatchAnalysis } from "./schemas/match-analysis";
@@ -14,8 +14,10 @@ const MOCK_DELAY_MS = 1_500;
 export interface MatchResult {
   analysis: StoredMatchAnalysis;
   score: number;
-  /** "leverantör:modell@promptversion" – sparas för spårbarhet. */
+  /** "leverantör:modell" – sparas för spårbarhet. */
   model: string;
+  promptVersion: string;
+  usage: TokenUsage;
 }
 
 export type AnalyzeMatchResult = { ok: true; value: MatchResult } | { ok: false; error: AiFailure };
@@ -64,6 +66,12 @@ export async function analyzeMatch(input: MatchPromptInput): Promise<AnalyzeMatc
   }
   return {
     ok: true,
-    value: { analysis: finalized.analysis, score: finalized.score, model: `${generated.modelId}@${MATCH_PROMPT_VERSION}` },
+    value: {
+      analysis: finalized.analysis,
+      score: finalized.score,
+      model: generated.modelId,
+      promptVersion: MATCH_PROMPT_VERSION,
+      usage: generated.usage,
+    },
   };
 }

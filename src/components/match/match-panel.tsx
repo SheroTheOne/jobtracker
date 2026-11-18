@@ -55,6 +55,8 @@ export async function MatchPanel({ applicationId, hasJobDescription }: MatchPane
                   analysis={report.analysis}
                   score={report.score}
                   model={report.model}
+                  promptVersion={report.promptVersion}
+                  usage={report.usage}
                   createdAt={report.createdAt}
                   cvChanged={report.cvSnapshotHash !== hashCv(profile.cvText)}
                 />

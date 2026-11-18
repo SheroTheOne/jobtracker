@@ -1,5 +1,5 @@
 import "server-only";
-import { generateText, Output } from "ai";
+import { generateText, NoObjectGeneratedError, Output } from "ai";
 import type { z } from "zod";
 import { classifyAiError, isInvalidOutputError, type AiFailure } from "./errors";
 import { mockDelay, resolveModel } from "./provider";
@@ -10,7 +10,20 @@ import { mockDelay, resolveModel } from "./provider";
  * Anroparen får alltid ett resultat – aldrig ett kastat fel.
  */
 
-export type AiResult<T> = { ok: true; value: T; modelId: string } | { ok: false; error: AiFailure };
+/** Tokenförbrukning summerad över alla försök. null i testläge eller när leverantören inte rapporterar. */
+export interface TokenUsage {
+  inputTokens: number | null;
+  outputTokens: number | null;
+}
+
+export type AiResult<T> = { ok: true; value: T; modelId: string; usage: TokenUsage } | { ok: false; error: AiFailure };
+
+const NO_USAGE: TokenUsage = { inputTokens: null, outputTokens: null };
+
+function addUsage(total: TokenUsage, usage: { inputTokens?: number; outputTokens?: number } | undefined): TokenUsage {
+  const add = (a: number | null, b: number | undefined) => (b === undefined ? a : (a ?? 0) + b);
+  return { inputTokens: add(total.inputTokens, usage?.inputTokens), outputTokens: add(total.outputTokens, usage?.outputTokens) };
+}
 
 export interface StructuredRequest<T> {
   /** Namn i loggar, t.ex. "analyze-match". */
@@ -39,13 +52,14 @@ export async function generateStructured<T>(request: StructuredRequest<T>): Prom
     const resolved = resolveModel();
     if (resolved.kind === "mock") {
       await mockDelay(request.mockDelayMs ?? 0);
-      return { ok: true, value: request.mock(), modelId: resolved.modelId };
+      return { ok: true, value: request.mock(), modelId: resolved.modelId, usage: NO_USAGE };
     }
 
     const abortSignal = AbortSignal.timeout(request.timeoutMs);
+    let usage = NO_USAGE;
     for (let attempt = 1; ; attempt++) {
       try {
-        const { output } = await generateText({
+        const result = await generateText({
           model: resolved.model,
           system: request.system,
           prompt: request.prompt,
@@ -54,8 +68,11 @@ export async function generateStructured<T>(request: StructuredRequest<T>): Prom
           maxRetries: API_RETRIES,
           abortSignal,
         });
-        return { ok: true, value: output as T, modelId: resolved.modelId };
+        usage = addUsage(usage, result.usage);
+        return { ok: true, value: result.output as T, modelId: resolved.modelId, usage };
       } catch (error) {
+        // Även ett ogiltigt svar har kostat tokens.
+        if (NoObjectGeneratedError.isInstance(error)) usage = addUsage(usage, error.usage);
         if (attempt < INVALID_OUTPUT_ATTEMPTS && isInvalidOutputError(error) && !abortSignal.aborted) {
           console.warn(`[ai/${request.task}] ogiltig output, försök ${attempt + 1}`);
           continue;

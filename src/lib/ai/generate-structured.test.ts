@@ -15,7 +15,7 @@ function invalidOutput(): NoObjectGeneratedError {
     message: "ogiltig",
     text: "{",
     response: { id: "1", timestamp: new Date(), modelId: "m" },
-    usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } as never,
+    usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 } as never,
     finishReason: "stop",
   });
 }
@@ -40,14 +40,31 @@ beforeEach(() => {
 describe("generateStructured", () => {
   it("returnerar mocksvaret i testläge utan att anropa modellen", async () => {
     vi.mocked(resolveModel).mockReturnValue({ kind: "mock", modelId: "mock" });
-    await expect(generateStructured(request)).resolves.toEqual({ ok: true, value: { answer: "mock" }, modelId: "mock" });
+    await expect(generateStructured(request)).resolves.toEqual({
+      ok: true,
+      value: { answer: "mock" },
+      modelId: "mock",
+      usage: { inputTokens: null, outputTokens: null },
+    });
     expect(generateTextMock).not.toHaveBeenCalled();
   });
 
-  it("försöker igen en gång när svaret inte följer schemat", async () => {
-    generateTextMock.mockRejectedValueOnce(invalidOutput()).mockResolvedValueOnce({ output: { answer: "ok" } } as never);
-    await expect(generateStructured(request)).resolves.toEqual({ ok: true, value: { answer: "ok" }, modelId: "google:test" });
+  it("försöker igen en gång när svaret inte följer schemat och summerar tokens från båda försöken", async () => {
+    generateTextMock
+      .mockRejectedValueOnce(invalidOutput())
+      .mockResolvedValueOnce({ output: { answer: "ok" }, usage: { inputTokens: 100, outputTokens: 20 } } as never);
+    await expect(generateStructured(request)).resolves.toEqual({
+      ok: true,
+      value: { answer: "ok" },
+      modelId: "google:test",
+      usage: { inputTokens: 200, outputTokens: 30 },
+    });
     expect(generateTextMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("ger null-förbrukning när leverantören inte rapporterar tokens", async () => {
+    generateTextMock.mockResolvedValueOnce({ output: { answer: "ok" }, usage: {} } as never);
+    await expect(generateStructured(request)).resolves.toMatchObject({ usage: { inputTokens: null, outputTokens: null } });
   });
 
   it("ger INVALID_OUTPUT efter två ogiltiga svar", async () => {

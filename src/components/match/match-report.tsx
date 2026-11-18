@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { CircleAlert, CircleCheck, CircleDashed, CircleHelp, Lightbulb, TriangleAlert } from "lucide-react";
+import type { TokenUsage } from "@/lib/ai/generate-structured";
 import type { StoredMatchAnalysis } from "@/lib/ai/schemas/match-analysis";
 import { IMPORTANCE_LABELS, type Importance } from "@/lib/domain/requirements";
 import { formatDate } from "@/lib/dates";
@@ -10,11 +11,20 @@ interface MatchReportProps {
   analysis: StoredMatchAnalysis;
   score: number;
   model: string;
+  promptVersion: string;
+  usage: TokenUsage;
   createdAt: Date;
   cvChanged: boolean;
 }
 
-export function MatchReport({ analysis, score, model, createdAt, cvChanged }: MatchReportProps) {
+function formatUsage({ inputTokens, outputTokens }: TokenUsage): string | null {
+  if (inputTokens === null && outputTokens === null) return null;
+  const total = (inputTokens ?? 0) + (outputTokens ?? 0);
+  return `${total.toLocaleString("sv-SE")} tokens`;
+}
+
+export function MatchReport({ analysis, score, model, promptVersion, usage, createdAt, cvChanged }: MatchReportProps) {
+  const usageLabel = formatUsage(usage);
   const critical = analysis.missing.filter((m) => m.importance === "CRITICAL");
   const niceToHave = analysis.missing.filter((m) => m.importance === "NICE_TO_HAVE");
   const unverified = analysis.matched.filter((m) => !m.evidenceVerified).length;
@@ -113,7 +123,8 @@ export function MatchReport({ analysis, score, model, createdAt, cvChanged }: Ma
       </Section>
 
       <footer className="text-muted-foreground border-t pt-3 text-xs">
-        Analyserad {formatDate(createdAt)} · {model}
+        Analyserad {formatDate(createdAt)} · {model} · prompt {promptVersion}
+        {usageLabel && ` · ${usageLabel}`}
         {unverified > 0 && ` · ${unverified} belägg kunde inte verifieras`}
         <details className="mt-1">
           <summary className="cursor-pointer">Hur räknas poängen?</summary>

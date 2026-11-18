@@ -27,12 +27,13 @@ async function main(): Promise<void> {
       continue;
     }
 
-    const { analysis, score, model } = result.value;
+    const { analysis, score, model, promptVersion, usage } = result.value;
     const failures = live ? checkEvalCase(evalCase.expect, analysis, score) : [];
     const verified = analysis.matched.filter((m) => m.evidenceVerified).length;
     console.log(
       `${failures.length === 0 ? "✓" : "✗"} ${evalCase.name} (${seconds} s)\n` +
-        `    ${score} % · ${analysis.matched.length} matchade (${verified} verifierade) · ${analysis.missing.length} saknade · ${model}`,
+        `    ${score} % · ${analysis.matched.length} matchade (${verified} verifierade) · ${analysis.missing.length} saknade · ${model}@${promptVersion}` +
+        (usage.inputTokens !== null ? ` · ${usage.inputTokens}+${usage.outputTokens ?? 0} tokens` : ""),
     );
     for (const failure of failures) console.log(`    – ${failure}`);
     if (failures.length > 0) failed++;

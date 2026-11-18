@@ -1,5 +1,6 @@
 import "server-only";
 import { io } from "next/cache";
+import type { TokenUsage } from "@/lib/ai/generate-structured";
 import { db } from "@/lib/db/client";
 import { hashCv } from "@/lib/domain/cv-fingerprint";
 import {
@@ -14,6 +15,8 @@ export type MatchReportView =
       id: string;
       score: number;
       model: string;
+      promptVersion: string;
+      usage: TokenUsage;
       createdAt: Date;
       cvSnapshotHash: string;
       analysis: StoredMatchAnalysis;
@@ -44,6 +47,8 @@ export async function getLatestMatchReport(applicationId: string): Promise<Match
     id: row.id,
     score: row.score,
     model: row.model,
+    promptVersion: row.promptVersion,
+    usage: { inputTokens: row.inputTokens, outputTokens: row.outputTokens },
     createdAt: row.createdAt,
     cvSnapshotHash: row.cvSnapshotHash,
     analysis: parsed.data,
@@ -64,6 +69,8 @@ export interface CreateMatchReportInput {
   analysis: StoredMatchAnalysis;
   score: number;
   model: string;
+  promptVersion: string;
+  usage: TokenUsage;
   cvText: string;
 }
 
@@ -74,6 +81,9 @@ export async function createMatchReport(input: CreateMatchReportInput): Promise<
       analysis: input.analysis,
       score: input.score,
       model: input.model,
+      promptVersion: input.promptVersion,
+      inputTokens: input.usage.inputTokens,
+      outputTokens: input.usage.outputTokens,
       schemaVersion: MATCH_ANALYSIS_SCHEMA_VERSION,
       cvSnapshotHash: hashCv(input.cvText),
     },

@@ -28,8 +28,9 @@ Kärnflödet fungerar: ansökningar med statusflöde och uppföljning, profil me
 | 9 | Data | Profilen hämtades flera gånger per sidvisning (sidan, matchningspanelen). | ✅ Åtgärdad (React `cache`) |
 | 10 | Externt API | Ett ogiltigt datum från Platsbanken kraschade hela resultatlistan. Annonslänken renderades utan kontroll av protokollet. | ✅ Åtgärdad |
 | 11 | Data | Schemat påstår att man byter till PostgreSQL genom att byta `provider`, men Prisma-klienten är hårdkopplad till `better-sqlite3`-adaptern. | Fas 1 |
-| 12 | Data | SQLite körs utan WAL och `busy_timeout`. Samtidiga skrivningar (en lång matchning plus en statusändring) kan ge `SQLITE_BUSY`. | Fas 1 |
-| 13 | Data | Promptversionen är inbakad i `model`-strängen (`google:x@match-v1`) och kan inte filtreras eller grupperas. | Fas 1 |
+| 12 | Data | SQLite körde i rollback-journal-läge (inte WAL), så en läsande process (Studio, seed, bygge) kunde blockera appens skrivningar. `busy_timeout` (5 s) och `foreign_keys` var redan på via better-sqlite3:s standardvärden. | ✅ Åtgärdad |
+| 13 | Data | Promptversionen var inbakad i `model`-strängen (`google:x@match-v1`) och kunde inte filtreras eller grupperas. Tokenförbrukning sparades inte. | ✅ Åtgärdad |
+| 17 | Test | Datalagret (transaktioner, idempotent import, kaskadradering) saknade tester mot en riktig databas. | ✅ Åtgärdad |
 | 14 | AI | Inga evals. Ändringar i prompt eller modell gick inte att jämföra objektivt. | Grund på plats, fortsätter i fas 2 |
 | 15 | UX | En matchning tar ungefär 20 s i en blockerande Server Action, utan progress, och den kan startas flera gånger parallellt. | Fas 2 |
 | 16 | Domän | Statushistorik saknas. Bara `lastContactAt` sparas, så tidslinje och statistik går inte att bygga. | Fas 3 |
@@ -46,20 +47,21 @@ Gjordes i samband med den här planen:
 - Datalagret: transaktioner för läs-och-skriv, `prisma-errors.ts`, `cache()` för `getProfile` och `getApplication`, `hashCv` flyttad till domänlagret.
 - Validering: gemensamma formulärhjälpare (`validation/form.ts`) och `PROFILE_LIMITS`, som delas med AI-förslaget.
 
-## Fas 1: Robust datalager (nästa steg)
+## Fas 1: Robust datalager (pågår – 1.2–1.4 klara)
 
 **Mål:** Det ska vara sant att appen kan köras på PostgreSQL, och SQLite ska tåla samtidiga skrivningar.
+
+**Klart 2026-11-18:**
+- 1.2: `db/client.ts` aktiverar WAL vid start och sätter `timeout` explicit. Verifierat: `dev.db` står i `journal_mode=wal`. WAL-filerna ligger i `.gitignore`.
+- 1.3: migreringen `match_report_prompt_version` lägger till `promptVersion`, `inputTokens` och `outputTokens`, och delar befintliga `model@version`-strängar (verifierat på testdata). `generateStructured` summerar tokens över alla försök, även misslyckade. Rapportens sidfot och `eval:match` visar promptversion och tokens.
+- 1.4: `src/test/test-database.ts` skapar en temporär SQLite-fil och kör alla migrationer. `data-layer.integration.test.ts` täcker statusflöde, samtidiga ändringar, idempotent import (även samtidig), en enda profil, rapporter, korrupt JSON och kaskadradering. Testerna körs i `npm test`.
+
+**Kvar:**
 
 1. **Adapter efter miljö.** `db/client.ts` väljer `@prisma/adapter-pg` för `postgres://` och `better-sqlite3` annars. Prismas `provider` går inte att växla vid körning, så beslutet blir antingen två schemafiler (`schema.sqlite.prisma` och `schema.postgres.prisma`, genererade från en källa) eller PostgreSQL även lokalt via Docker.
    - *Motivering:* nuvarande dokumentation lovar något som inte fungerar.
    - *Acceptans:* `DATABASE_URL=postgres://… npm run build && npm start` fungerar, och CI kör migreringarna mot båda databaserna.
-2. **SQLite-pragman.** `journal_mode=WAL`, `busy_timeout=5000` och `foreign_keys=ON` sätts när klienten skapas.
-   - *Acceptans:* ett test som kör två samtidiga skrivtransaktioner får inget `SQLITE_BUSY`.
-3. **`MatchReport.promptVersion`** som egen kolumn, migrerad från `model`-strängen. Lägg också till `inputTokens` och `outputTokens` (från `generateText().usage`).
-   - *Motivering:* gör det möjligt att jämföra promptversioner och följa kostnad och kvot.
-   - *Acceptans:* migreringen fyller i kolumnerna för befintliga rader, och rapportens sidfot visar promptversion och antal tokens.
-4. **Ett Prisma-integrationstest** mot en temporär SQLite-fil för `updateApplication`, `changeApplicationStatus` och `importApplication` (idempotens).
-   - *Acceptans:* testerna körs i `npm test` utan att röra `dev.db`.
+2. **Statistik över tokens:** en enkel sammanställning per promptversion (snittpoäng, tokens per analys) på en intern sida eller i `eval:match`. Bygger på kolumnerna från 1.3.
 
 ## Fas 2: AI-kvalitet och flöde
 

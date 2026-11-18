@@ -88,10 +88,14 @@ model MatchReport {
   score          Int // 0–100, denormaliserad från analysis för sortering/filtrering
   analysis       Json // MatchAnalysis (Zod) – krav, matchningar, luckor, pitch
   schemaVersion  Int    @default(1) // bumpas när MatchAnalysis-schemat ändras
-  model          String // "leverantör:modell@promptversion", t.ex. "google:gemini-3.5-flash@match-v1"
+  model          String // "leverantör:modell", t.ex. "google:gemini-3.5-flash" – spårbarhet
+  promptVersion  String // t.ex. "match-v1" – jämför resultat mellan promptversioner
+  inputTokens    Int? // förbrukning (summa över omförsök) – null i testläge och för äldre rapporter
+  outputTokens   Int?
   cvSnapshotHash String // sha256 av cvText vid analys → visa "inaktuell" om CV:t ändrats
 
   createdAt DateTime @default(now())
 
   @@index([applicationId, createdAt])
+  @@index([promptVersion])
 }
