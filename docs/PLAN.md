@@ -2,6 +2,38 @@
 
 Senast uppdaterad: 2026-11-18. Planen bygger på en genomgång av hela kodbasen (arkitektur, datamodell, AI-flöde, tester). Varje punkt har en motivering och ett acceptanskriterium. Prioriteten går uppifrån och ned.
 
+## Handoff (2026-11-18)
+
+Sessionen avslutades efter fas 1.2–1.4. Inget arbete pågår halvvägs: arbetsträdet är rent, och alla kontroller var gröna vid avslut (`typecheck`, `lint`, 117/117 tester, `build`, alla sidor svarade 200 i produktionsläge).
+
+**Gren:** `feat/core-modules` (pushad till `origin`, ingen PR skapad än).
+
+### Klart
+
+| Commit | Innehåll |
+| ------ | -------- |
+| `968f0af` | Fas 0: citatverifiering (`domain/evidence.ts`), rensning av kravlistor (`domain/requirements.ts`), gemensam `ai/generate-structured.ts` med omförsök vid ogiltig output, skydd mot prompt injection (`ai/prompts/data-tags.ts`), anpassning av CV-förslaget till formulärets gränser, transaktioner och `cache()` i datalagret, säker hantering av Platsbanken-data, golden set och `npm run eval:match`, den här planen. |
+| `00f4049` | Fas 1.2–1.4: WAL för SQLite (`db/client.ts`), migreringen `20261118180704_match_report_prompt_version` (`promptVersion`, `inputTokens`, `outputTokens` med uppdelning av gamla strängar), tokens summerade över försök, integrationstester för datalagret (`src/test/test-database.ts`, `src/lib/data/data-layer.integration.test.ts`). |
+| commiten som lade till detta avsnitt | Handoff-avsnittet. |
+
+### Här slutade arbetet
+
+- **Fas 1.1 (PostgreSQL) väntar på ett beslut av dig.** Prisma kan inte byta `provider` medan appen körs, så det finns två vägar:
+  - **A. PostgreSQL även lokalt via Docker.** Ett schema och en uppsättning migreringar, samma databas i utveckling och produktion. Kräver Docker för att köra appen.
+  - **B. Två schemafiler** (`schema.sqlite.prisma` och `schema.postgres.prisma`) genererade från en källa, med `db/client.ts` som väljer adapter efter `DATABASE_URL`. SQLite förblir lika enkelt som nu, men migreringarna måste underhållas i två uppsättningar.
+- **`npm run eval:match` har bara körts i testläge (mock).** Ingen körning mot riktig Gemini har gjorts, så förväntningarna i `src/lib/ai/evals/fixtures.ts` är ännu inte kalibrerade.
+- En säkerhetskopia av `dev.db` från före migreringen låg i sessionens tillfälliga mapp. Den är inte versionshanterad och kan vara borta. Den behövs inte, eftersom migreringen var additiv och verifierad.
+
+### Nästa steg när arbetet återupptas
+
+1. **Kalibrera evals:** sätt `AI_PROVIDER="google"` och nyckeln i `.env`, kör `npm run eval:match` och justera poängintervall och mönster i `fixtures.ts` om fallen slår fel av rimliga skäl. Spara utskriften som första mätvärde.
+2. **Bestäm A eller B för fas 1.1** och genomför det enligt acceptanskriteriet under fas 1.
+3. **Fas 2.4 (kräver ingen nyckel):** markera kompetenser i CV-förslaget som inte står i CV:t. Använd `mentionsSkill` från `domain/quick-match.ts` i `sanitizeProfileSuggestion` (`ai/extract-profile.ts`) och visa markeringen i `components/profile/profile-form.tsx`.
+4. **Fas 2.5, första delen (kräver ingen nyckel):** spärra så att samma ansökan inte kan matchas två gånger samtidigt, till exempel med en pågående-markering i databasen eller ett lås per ansökan i `lib/match/run-match.ts`. Lägg till ett integrationstest.
+5. Skapa en PR från `feat/core-modules` till `main` när ovanstående är granskat.
+
+**Kontroll innan något räknas som klart:** `npm run typecheck && npm run lint && npm test && npm run build`. Kör även `npx prisma generate` efter varje schemaändring, eftersom `migrate dev` inte alltid gör det.
+
 ## Nuläge
 
 Kärnflödet fungerar: ansökningar med statusflöde och uppföljning, profil med CV-uppladdning, jobbsökning i Platsbanken och AI-matchning med verifierade citat och poäng som räknas i kod. Kodbasen är i gott skick: strikt TypeScript, tydliga lager, ren domänlogik med enhetstester, Zod på alla gränser (formulär, Json-kolumner, externt API, AI-svar).
