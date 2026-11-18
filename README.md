@@ -2,7 +2,7 @@
 
 En webbapp för att hålla koll på jobbansökningar och få AI-hjälp att jämföra jobbannonser med sitt CV.
 
-> **Status:** Under utveckling. Ansökningar, profil och AI-matchning fungerar.
+> **Status:** Under utveckling. Ansökningar, profil och AI-matchning fungerar. Se [utvecklingsplanen](docs/PLAN.md) för nästa steg.
 
 ## Idén
 
@@ -41,9 +41,12 @@ AI:n ger underlag och förslag. Det är alltid användaren som bedömer resultat
 ### Så fungerar matchningen
 
 - **Typad output:** Modellen tvingas svara enligt ett Zod-schema ([`match-analysis.ts`](src/lib/ai/schemas/match-analysis.ts)) via AI SDK:s `Output.object`, och svaret valideras igen innan det sparas.
-- **Verifierade belägg:** Varje matchat krav måste citera CV:t ordagrant. Citatet kontrolleras i kod; overifierade citat markeras och ger lägre poäng.
+- **Verifierade belägg:** Varje matchat krav måste citera CV:t ordagrant. Citatet kontrolleras i kod ([`evidence.ts`](src/lib/domain/evidence.ts)): hela ord, i rätt ordning, tolerant mot formatering och PDF-artefakter. Overifierade citat markeras och ger lägre poäng.
+- **Städade kravlistor:** Dubbletter och krav som modellen lagt i både "uppfyllda" och "saknade" rensas innan poängen räknas ([`requirements.ts`](src/lib/domain/requirements.ts)).
 - **Poängen räknas i kod, inte av AI:n:** krav väger 3, meriterande 1; starkt uppfyllt ger full vikt, delvis eller overifierat halv ([`match-scoring.ts`](src/lib/domain/match-scoring.ts)).
 - **Spårbarhet:** Varje rapport sparas med modell, promptversion och ett fingeravtryck av CV:t, så appen kan säga till när CV:t ändrats sedan analysen.
+- **Felhantering:** Alla AI-anrop går via [`generate-structured.ts`](src/lib/ai/generate-structured.ts): timeout, omförsök (även när svaret inte följer schemat) och begripliga felmeddelanden. Användardata ligger i taggar som inte kan brytas ut ur.
+- **Evals:** `npm run eval:match` kör analysen mot ett golden set ([`evals/fixtures.ts`](src/lib/ai/evals/fixtures.ts)) och kontrollerar förväntade krav, poängintervall och andel verifierade citat. Körs före och efter varje ändring av prompt eller modell.
 - **Testläge:** Med `AI_PROVIDER="mock"` returneras ett exempelsvar – hela flödet kan utvecklas utan nyckel eller kostnad.
 
 ### Jobbsökning
@@ -76,17 +79,20 @@ Statusändringar räknas som kontakt. Reglerna är rena funktioner i [`src/lib/d
 ```
 src/
 ├── app/                # Routes – tunna sidor som komponerar komponenter
-├── components/         # UI, uppdelat per domän (applications/, profile/, layout/, ui/)
+├── components/         # UI, uppdelat per domän (applications/, jobs/, match/, profile/, layout/, ui/)
 └── lib/
-    ├── actions/        # Server Actions: validera → anropa data/ → revalidera
+    ├── actions/        # Server Actions: validera → anropa data/ eller match/ → revalidera
     ├── data/           # All databasåtkomst (enda lagret som pratar med Prisma)
-    ├── domain/         # Ren affärslogik utan beroenden – enhetstestad
+    ├── domain/         # Ren affärslogik utan beroenden – enhetstestad (status, uppföljning, poäng, citat)
     ├── validation/     # Zod-scheman för formulär och Json-kolumner
-    ├── ai/             # AI-anrop, prompter, scheman, felhantering och testläge
+    ├── ai/             # AI-anrop, prompter, scheman, felhantering, testläge och evals
+    ├── match/          # Orkestrering: ansökan + profil → AI-analys → sparad rapport
+    ├── jobs/           # Klient för Platsbankens JobSearch-API
+    ├── documents/      # Textutvinning ur PDF/Word/Markdown
     └── db/             # Prisma-klient
 ```
 
-UI anropar bara `actions/`. Bara `data/` når databasen. `ai/` vet ingenting om databasen.
+Beroenden går åt ett håll: `domain/` beror inte på något annat lager. `ai/` vet ingenting om databasen. Bara `data/` når Prisma. Server Components läser via `data/`; alla ändringar går via `actions/`.
 
 ## Kom igång
 
@@ -107,6 +113,7 @@ npm run dev               # http://localhost:3000
 | `npm run typecheck` | TypeScript-kontroll                   |
 | `npm run lint`      | ESLint                                |
 | `npm run db:studio` | Öppnar Prisma Studio för att se datan |
+| `npm run eval:match` | Kör AI-matchningen mot golden set (riktiga anrop när `AI_PROVIDER="google"`) |
 
 ## Så används AI i projektet
 

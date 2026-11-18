@@ -39,7 +39,7 @@ export interface JobAd {
   url: string;
   description: string;
   employmentType: string | null;
-  publishedAt: Date;
+  publishedAt: Date | null;
   deadline: Date | null;
 }
 
@@ -52,17 +52,35 @@ export class JobSourceError extends Error {
   override name = "JobSourceError";
 }
 
+/** Länken renderas som href och sparas på ansökan – bara http(s) släpps igenom (inga javascript:-länkar). */
+function safeHttpUrl(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Ett ogiltigt datum från API:t ska inte krascha hela resultatlistan (date-fns kastar på Invalid Date). */
+function parseApiDate(value: string | null): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function toJobAd(raw: z.infer<typeof adSchema>): JobAd {
   return {
     id: raw.id,
     title: raw.headline,
     employer: raw.employer?.name?.trim() || "Okänd arbetsgivare",
     location: raw.workplace_address?.municipality ?? raw.workplace_address?.region ?? null,
-    url: raw.webpage_url ?? `https://arbetsformedlingen.se/platsbanken/annonser/${raw.id}`,
+    url: safeHttpUrl(raw.webpage_url) ?? `https://arbetsformedlingen.se/platsbanken/annonser/${encodeURIComponent(raw.id)}`,
     description: raw.description?.text?.trim() ?? "",
     employmentType: raw.employment_type?.label ?? null,
-    publishedAt: new Date(raw.publication_date),
-    deadline: raw.application_deadline ? new Date(raw.application_deadline) : null,
+    publishedAt: parseApiDate(raw.publication_date),
+    deadline: parseApiDate(raw.application_deadline),
   };
 }
 

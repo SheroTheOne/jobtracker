@@ -5,9 +5,14 @@ import { z } from "zod";
  * Trimmar, tar bort tomma poster och dubbletter (skiftlägesokänsligt, första stavningen vinner).
  */
 export function parseStringList(input: string): string[] {
+  return dedupeStrings(input.split(/[,;\n]/));
+}
+
+/** Trimmar, slår ihop blanksteg och tar bort tomma poster och dubbletter (skiftlägesokänsligt). */
+export function dedupeStrings(items: readonly string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
-  for (const raw of input.split(/[,;\n]/)) {
+  for (const raw of items) {
     const item = raw.trim().replace(/\s+/g, " ");
     const key = item.toLocaleLowerCase("sv-SE");
     if (item && !seen.has(key)) {

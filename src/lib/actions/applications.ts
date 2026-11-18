@@ -7,10 +7,10 @@ import {
   changeApplicationStatus,
   createApplication,
   deleteApplication,
-  isRecordNotFound,
   logApplicationContact,
   updateApplication,
 } from "@/lib/data/applications";
+import { isRecordNotFound } from "@/lib/data/prisma-errors";
 import { APPLICATION_STATUSES } from "@/lib/domain/application-status";
 import {
   applicationFormSchema,

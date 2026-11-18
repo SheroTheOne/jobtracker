@@ -39,8 +39,12 @@ export function JobAdCard({ ad, quick, savedApplicationId, canMatch, now }: JobA
         <h3 className="font-medium">{ad.title}</h3>
         <p className="text-muted-foreground text-sm">{meta}</p>
         <p className="text-muted-foreground text-xs">
-          Publicerad {formatDistanceStrict(ad.publishedAt, now, { addSuffix: true, locale: sv })}
-          {ad.deadline && ` · Sista dag ${formatDate(ad.deadline)}`}
+          {[
+            ad.publishedAt && `Publicerad ${formatDistanceStrict(ad.publishedAt, now, { addSuffix: true, locale: sv })}`,
+            ad.deadline && `Sista dag ${formatDate(ad.deadline)}`,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </p>
       </header>
 

@@ -1,5 +1,6 @@
 import { SENIORITY_LABELS } from "@/lib/domain/seniority";
 import type { SeniorityLevel } from "@/generated/prisma/enums";
+import { wrapData } from "./data-tags";
 
 /** Bumpa vid ändringar som påverkar resultatet, så att rapporter kan spåras till promptversion. */
 export const MATCH_PROMPT_VERSION = "match-v1";
@@ -38,12 +39,8 @@ export function buildMatchPrompt({ cvText, jobDescription, candidate, job }: Mat
 - Söker roller som: ${candidate.targetRoles.join(", ")}
 - Kärnkompetenser: ${candidate.coreSkills.join(", ")}
 
-<cv>
-${cvText}
-</cv>
+${wrapData("cv", cvText)}
 
 Annons: ${job.role} hos ${job.company}
-<annons>
-${jobDescription}
-</annons>`;
+${wrapData("annons", jobDescription)}`;
 }

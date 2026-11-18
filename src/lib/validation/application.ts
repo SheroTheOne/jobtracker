@@ -1,14 +1,7 @@
 import { z } from "zod";
 import { parseDateInput } from "@/lib/dates";
 import { APPLICATION_STATUSES } from "@/lib/domain/application-status";
-
-/** Tom sträng → null, annars trimmad text med maxlängd. */
-const optionalText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max, { error: `Max ${max.toLocaleString("sv-SE")} tecken` })
-    .transform((value) => (value === "" ? null : value));
+import { optionalText, readFormValues } from "./form";
 
 const optionalDate = z
   .string()
@@ -49,9 +42,5 @@ export type ApplicationFormValues = Record<ApplicationFormField, string>;
 export type ApplicationInput = z.output<typeof applicationFormSchema>;
 
 export function readApplicationFormValues(formData: FormData): ApplicationFormValues {
-  const entries = APPLICATION_FORM_FIELDS.map((field) => {
-    const value = formData.get(field);
-    return [field, typeof value === "string" ? value : ""] as const;
-  });
-  return Object.fromEntries(entries) as ApplicationFormValues;
+  return readFormValues(formData, APPLICATION_FORM_FIELDS);
 }

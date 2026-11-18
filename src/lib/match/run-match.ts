@@ -3,8 +3,7 @@ import { analyzeMatch } from "@/lib/ai/analyze-match";
 import { getApplication } from "@/lib/data/applications";
 import { createMatchReport } from "@/lib/data/match-reports";
 import { getProfile } from "@/lib/data/profile";
-
-const JOB_DESCRIPTION_MIN_LENGTH = 100;
+import { canAnalyzeJobDescription } from "@/lib/domain/job-description";
 
 export type RunMatchResult = { ok: true; score: number } | { ok: false; error: string };
 
@@ -18,7 +17,7 @@ export async function runMatchForApplication(applicationId: string): Promise<Run
   if (!profile) return { ok: false, error: "Lägg in ditt CV under Profil först." };
 
   const jobDescription = application.jobDescriptionText?.trim() ?? "";
-  if (jobDescription.length < JOB_DESCRIPTION_MIN_LENGTH) {
+  if (!canAnalyzeJobDescription(jobDescription)) {
     return { ok: false, error: "Annonstexten är för kort. Klistra in hela annonsen under Redigera." };
   }
 

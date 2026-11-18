@@ -88,7 +88,7 @@ model MatchReport {
   score          Int // 0–100, denormaliserad från analysis för sortering/filtrering
   analysis       Json // MatchAnalysis (Zod) – krav, matchningar, luckor, pitch
   schemaVersion  Int    @default(1) // bumpas när MatchAnalysis-schemat ändras
-  model          String // t.ex. "claude-sonnet-5-5" – spårbarhet
+  model          String // "leverantör:modell@promptversion", t.ex. "google:gemini-3.5-flash@match-v1"
   cvSnapshotHash String // sha256 av cvText vid analys → visa "inaktuell" om CV:t ändrats
 
   createdAt DateTime @default(now())

@@ -1,9 +1,10 @@
 import "server-only";
-import { generateText, Output } from "ai";
-import { computeMatchScore, isEvidenceInCv } from "@/lib/domain/match-scoring";
-import { classifyAiError, type AiFailure } from "./errors";
+import { createEvidenceVerifier } from "@/lib/domain/evidence";
+import { computeMatchScore } from "@/lib/domain/match-scoring";
+import { reconcileRequirements } from "@/lib/domain/requirements";
+import { aiFailure, type AiFailure } from "./errors";
+import { generateStructured } from "./generate-structured";
 import { createMockAnalysis } from "./mock";
-import { mockDelay, resolveModel } from "./provider";
 import { MATCH_PROMPT_VERSION, MATCH_SYSTEM_PROMPT, buildMatchPrompt, type MatchPromptInput } from "./prompts/match";
 import { matchAnalysisSchema, type MatchAnalysis, type StoredMatchAnalysis } from "./schemas/match-analysis";
 
@@ -19,46 +20,50 @@ export interface MatchResult {
 
 export type AnalyzeMatchResult = { ok: true; value: MatchResult } | { ok: false; error: AiFailure };
 
-async function generateAnalysis(input: MatchPromptInput): Promise<{ analysis: MatchAnalysis; modelId: string }> {
-  const resolved = resolveModel();
+export type FinalizedAnalysis =
+  | { ok: true; analysis: StoredMatchAnalysis; score: number }
+  | { ok: false; error: AiFailure };
 
-  if (resolved.kind === "mock") {
-    await mockDelay(MOCK_DELAY_MS);
-    return { analysis: createMockAnalysis({ cvText: input.cvText, role: input.job.role }), modelId: "mock" };
-  }
+/**
+ * Efterbearbetning i kod av modellens svar – ren funktion, testbar:
+ * 1. Städar kravlistorna (dubbletter, krav i både matched och missing).
+ * 2. Verifierar varje citat mot CV:t.
+ * 3. Räknar poängen deterministiskt.
+ * Ett svar utan krav ger ett fel i stället för en missvisande 0 %.
+ */
+export function finalizeAnalysis(analysis: MatchAnalysis, cvText: string): FinalizedAnalysis {
+  const { matched, missing } = reconcileRequirements(analysis.matched, analysis.missing);
+  if (matched.length + missing.length === 0) return { ok: false, error: aiFailure("NO_REQUIREMENTS") };
 
-  const { output } = await generateText({
-    model: resolved.model,
-    system: MATCH_SYSTEM_PROMPT,
-    prompt: buildMatchPrompt(input),
-    output: Output.object({ schema: matchAnalysisSchema, name: "match_analysis" }),
-    temperature: 0.2, // låg för konsekventa klassningar mellan körningar
-    maxRetries: 2, // AI SDK gör omförsök med backoff vid 429/5xx
-    abortSignal: AbortSignal.timeout(TIMEOUT_MS),
-  });
-  return { analysis: output, modelId: resolved.modelId };
-}
-
-/** Lägger till fält som härleds i kod: verifierade belägg och poäng. Ren funktion – testbar. */
-export function finalizeAnalysis(analysis: MatchAnalysis, cvText: string): { analysis: StoredMatchAnalysis; score: number } {
-  const matched = analysis.matched.map((match) => ({
-    ...match,
-    evidenceVerified: isEvidenceInCv(cvText, match.evidence),
-  }));
+  const verify = createEvidenceVerifier(cvText);
+  const verifiedMatched = matched.map((match) => ({ ...match, evidenceVerified: verify(match.evidence) }));
   return {
-    analysis: { ...analysis, matched },
-    score: computeMatchScore(matched, analysis.missing),
+    ok: true,
+    analysis: { ...analysis, matched: verifiedMatched, missing },
+    score: computeMatchScore(verifiedMatched, missing),
   };
 }
 
 export async function analyzeMatch(input: MatchPromptInput): Promise<AnalyzeMatchResult> {
-  try {
-    const { analysis, modelId } = await generateAnalysis(input);
-    const finalized = finalizeAnalysis(analysis, input.cvText);
-    return { ok: true, value: { ...finalized, model: `${modelId}@${MATCH_PROMPT_VERSION}` } };
-  } catch (error) {
-    const failure = classifyAiError(error);
-    console.error(`[ai/analyze-match] ${failure.code}`, error);
-    return { ok: false, error: failure };
+  const generated = await generateStructured({
+    task: "analyze-match",
+    schema: matchAnalysisSchema,
+    schemaName: "match_analysis",
+    system: MATCH_SYSTEM_PROMPT,
+    prompt: buildMatchPrompt(input),
+    timeoutMs: TIMEOUT_MS,
+    mock: () => createMockAnalysis({ cvText: input.cvText, role: input.job.role }),
+    mockDelayMs: MOCK_DELAY_MS,
+  });
+  if (!generated.ok) return generated;
+
+  const finalized = finalizeAnalysis(generated.value, input.cvText);
+  if (!finalized.ok) {
+    console.error(`[ai/analyze-match] ${finalized.error.code}`);
+    return finalized;
   }
+  return {
+    ok: true,
+    value: { analysis: finalized.analysis, score: finalized.score, model: `${generated.modelId}@${MATCH_PROMPT_VERSION}` },
+  };
 }

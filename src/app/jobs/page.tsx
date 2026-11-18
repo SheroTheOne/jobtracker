@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "cn";
 import { findImportedApplications } from "@/lib/data/applications";
+import { canAnalyzeJobDescription } from "@/lib/domain/job-description";
 import { getProfile, type Profile } from "@/lib/data/profile";
 import { quickMatch } from "@/lib/domain/quick-match";
 import { isSeniorTitle } from "@/lib/domain/seniority-filter";
@@ -205,7 +206,7 @@ async function Results({ view, profile }: { view: SearchView; profile: Profile |
             ad={ad}
             quick={quick}
             savedApplicationId={saved.get(ad.id)}
-            canMatch={profile !== null && ad.description.length >= 100}
+            canMatch={profile !== null && canAnalyzeJobDescription(ad.description)}
             now={now}
           />
         ))}

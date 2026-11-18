@@ -1,7 +1,15 @@
-import { APICallError, NoObjectGeneratedError, RetryError } from "ai";
+import { APICallError, NoObjectGeneratedError, NoOutputGeneratedError, RetryError } from "ai";
 import { AiConfigError } from "./config";
 
-export type AiErrorCode = "CONFIG" | "RATE_LIMIT" | "OVERLOADED" | "AUTH" | "TIMEOUT" | "INVALID_OUTPUT" | "UNKNOWN";
+export type AiErrorCode =
+  | "CONFIG"
+  | "RATE_LIMIT"
+  | "OVERLOADED"
+  | "AUTH"
+  | "TIMEOUT"
+  | "INVALID_OUTPUT"
+  | "NO_REQUIREMENTS"
+  | "UNKNOWN";
 
 export interface AiFailure {
   code: AiErrorCode;
@@ -15,8 +23,13 @@ const MESSAGES: Record<Exclude<AiErrorCode, "CONFIG">, string> = {
   AUTH: "API-nyckeln avvisades. Kontrollera GOOGLE_GENERATIVE_AI_API_KEY i .env.",
   TIMEOUT: "Analysen tog för lång tid och avbröts. Försök igen.",
   INVALID_OUTPUT: "AI:n returnerade ett svar som inte följde formatet. Försök igen.",
+  NO_REQUIREMENTS: "AI:n hittade inga krav i annonsen. Kontrollera att hela annonstexten är inklistrad.",
   UNKNOWN: "Analysen misslyckades av okänd anledning. Försök igen.",
 };
+
+export function aiFailure(code: Exclude<AiErrorCode, "CONFIG">): AiFailure {
+  return { code, message: MESSAGES[code] };
+}
 
 function fromApiCallError(error: APICallError): Exclude<AiErrorCode, "CONFIG"> {
   const status = error.statusCode;
@@ -28,6 +41,14 @@ function fromApiCallError(error: APICallError): Exclude<AiErrorCode, "CONFIG"> {
   return "UNKNOWN";
 }
 
+/**
+ * Svaret följde inte schemat (NoObjectGeneratedError) eller saknades helt, t.ex. för att
+ * det trunkerades eller stoppades av innehållsfilter (NoOutputGeneratedError).
+ */
+export function isInvalidOutputError(error: unknown): boolean {
+  return NoObjectGeneratedError.isInstance(error) || NoOutputGeneratedError.isInstance(error);
+}
+
 /** Översätter tekniska fel från AI SDK till en felkod och ett begripligt meddelande. */
 export function classifyAiError(error: unknown): AiFailure {
   if (error instanceof AiConfigError) return { code: "CONFIG", message: error.message };
@@ -37,9 +58,9 @@ export function classifyAiError(error: unknown): AiFailure {
 
   let code: Exclude<AiErrorCode, "CONFIG">;
   if (APICallError.isInstance(cause)) code = fromApiCallError(cause);
-  else if (NoObjectGeneratedError.isInstance(cause)) code = "INVALID_OUTPUT";
+  else if (isInvalidOutputError(cause)) code = "INVALID_OUTPUT";
   else if (cause instanceof DOMException && (cause.name === "TimeoutError" || cause.name === "AbortError")) code = "TIMEOUT";
   else code = "UNKNOWN";
 
-  return { code, message: MESSAGES[code] };
+  return aiFailure(code);
 }

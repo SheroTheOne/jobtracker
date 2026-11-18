@@ -1,4 +1,4 @@
-import type { Importance, MatchStrength } from "@/lib/ai/schemas/match-analysis";
+import type { Importance, MatchStrength } from "./requirements";
 
 /**
  * Matchningspoängen räknas deterministiskt i kod – inte av modellen.
@@ -33,30 +33,4 @@ export function computeMatchScore(matched: readonly ScorableMatch[], missing: re
   }, 0);
 
   return Math.round((earned / total) * 100);
-}
-
-/** Normaliserar för jämförelse: gemener, enhetliga citattecken/streck, ingen punktuation eller extra blanksteg. */
-function normalize(text: string): string {
-  return text
-    .toLocaleLowerCase("sv-SE")
-    .replace(/[‘’´`]/g, "'")
-    .replace(/[“”„]/g, '"')
-    .replace(/[–—]/g, "-")
-    .replace(/[^\p{L}\p{N}\s'+#.-]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/**
- * Kontrollerar att ett citat verkligen finns i CV:t. Tolerant mot skiftläge, blanksteg,
- * punktuation och att modellen kortat citatet med "…" (varje del måste då finnas).
- */
-export function isEvidenceInCv(cvText: string, evidence: string): boolean {
-  const haystack = normalize(cvText);
-  const parts = evidence
-    .split(/\.\.\.|…/)
-    .map(normalize)
-    .filter((part) => part.length > 0);
-  if (parts.length === 0) return false;
-  return parts.every((part) => part.length >= 3 && haystack.includes(part));
 }

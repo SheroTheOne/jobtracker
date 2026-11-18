@@ -14,7 +14,8 @@
     "postinstall": "prisma generate",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "eval:match": "tsx --conditions=react-server scripts/eval-match.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.113",

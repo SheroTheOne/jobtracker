@@ -1,5 +1,6 @@
 import "server-only";
 import { io } from "next/cache";
+import { cache } from "react";
 import { db } from "@/lib/db/client";
 import type { SeniorityLevel } from "@/generated/prisma/enums";
 import { storedStringListSchema } from "@/lib/validation/string-list";
@@ -18,13 +19,15 @@ export interface Profile {
 }
 
 // Enanvändarapp: den äldsta raden är "profilen". upsertProfile skapar aldrig en andra rad.
-async function findProfileRow() {
-  return db.profile.findFirst({ orderBy: { createdAt: "asc" } });
-}
+const OLDEST_FIRST = { orderBy: { createdAt: "asc" } } as const;
 
-export async function getProfile(): Promise<Profile | null> {
+/**
+ * Dedupliceras per request med React cache: översikten, matchningspanelen m.fl. läser profilen
+ * var för sig utan att det blir flera databasfrågor.
+ */
+export const getProfile = cache(async (): Promise<Profile | null> => {
   await io();
-  const row = await findProfileRow();
+  const row = await db.profile.findFirst(OLDEST_FIRST);
   if (!row) return null;
   return {
     id: row.id,
@@ -36,12 +39,15 @@ export async function getProfile(): Promise<Profile | null> {
     cvText: row.cvText,
     updatedAt: row.updatedAt,
   };
-}
+});
 
+/** Läs-och-skriv i en transaktion så att två samtidiga första sparningar inte skapar två profiler. */
 export async function upsertProfile(input: ProfileInput): Promise<{ id: string }> {
-  const existing = await findProfileRow();
-  if (existing) {
-    return db.profile.update({ where: { id: existing.id }, data: input, select: { id: true } });
-  }
-  return db.profile.create({ data: input, select: { id: true } });
+  return db.$transaction(async (tx) => {
+    const existing = await tx.profile.findFirst({ ...OLDEST_FIRST, select: { id: true } });
+    if (existing) {
+      return tx.profile.update({ where: { id: existing.id }, data: input, select: { id: true } });
+    }
+    return tx.profile.create({ data: input, select: { id: true } });
+  });
 }

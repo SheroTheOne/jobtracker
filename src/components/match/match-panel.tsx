@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getLatestMatchReport, hashCv, listMatchReportHistory } from "@/lib/data/match-reports";
+import { getLatestMatchReport, listMatchReportHistory } from "@/lib/data/match-reports";
 import { getProfile } from "@/lib/data/profile";
 import { formatDate } from "@/lib/dates";
+import { hashCv } from "@/lib/domain/cv-fingerprint";
 import { MatchReport } from "./match-report";
 import { MatchRunner } from "./match-runner";
 

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { CircleAlert, CircleCheck, CircleDashed, CircleHelp, Lightbulb, TriangleAlert } from "lucide-react";
-import type { Importance, StoredMatchAnalysis } from "@/lib/ai/schemas/match-analysis";
+import type { StoredMatchAnalysis } from "@/lib/ai/schemas/match-analysis";
+import { IMPORTANCE_LABELS, type Importance } from "@/lib/domain/requirements";
 import { formatDate } from "@/lib/dates";
 import { CopyButton } from "./copy-button";
 import { ScoreRing } from "./score-ring";
@@ -12,8 +13,6 @@ interface MatchReportProps {
   createdAt: Date;
   cvChanged: boolean;
 }
-
-const IMPORTANCE_LABEL: Record<Importance, string> = { CRITICAL: "Krav", NICE_TO_HAVE: "Meriterande" };
 
 export function MatchReport({ analysis, score, model, createdAt, cvChanged }: MatchReportProps) {
   const critical = analysis.missing.filter((m) => m.importance === "CRITICAL");
@@ -45,8 +44,8 @@ export function MatchReport({ analysis, score, model, createdAt, cvChanged }: Ma
             <Empty>Inga krav kunde styrkas med CV:t.</Empty>
           ) : (
             <ul className="grid gap-3">
-              {analysis.matched.map((match) => (
-                <li key={match.requirement} className="grid gap-1">
+              {analysis.matched.map((match, index) => (
+                <li key={`${index}-${match.requirement}`} className="grid gap-1">
                   <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                     {match.strength === "STRONG" ? (
                       <CircleCheck className="size-3.5 shrink-0 text-emerald-600" aria-label="Starkt" />
@@ -105,8 +104,8 @@ export function MatchReport({ analysis, score, model, createdAt, cvChanged }: Ma
           <div className="grid gap-1">
             <h4 className="text-muted-foreground text-xs font-medium">Att lyfta i intervju</h4>
             <ul className="list-disc space-y-1 pl-5 text-sm">
-              {analysis.pitch.talkingPoints.map((point) => (
-                <li key={point}>{point}</li>
+              {analysis.pitch.talkingPoints.map((point, index) => (
+                <li key={`${index}-${point}`}>{point}</li>
               ))}
             </ul>
           </div>
@@ -147,7 +146,7 @@ function Empty({ children }: { children: ReactNode }) {
 function ImportanceTag({ importance }: { importance: Importance }) {
   return (
     <span className="bg-muted text-muted-foreground rounded px-1.5 py-px text-[10px] font-normal tracking-wide uppercase">
-      {IMPORTANCE_LABEL[importance]}
+      {IMPORTANCE_LABELS[importance]}
     </span>
   );
 }
@@ -158,8 +157,8 @@ function GapList({ title, items }: { title: string; items: StoredMatchAnalysis["
     <div className="grid gap-2">
       <h4 className="text-muted-foreground text-xs font-medium">{title}</h4>
       <ul className="grid gap-2">
-        {items.map((gap) => (
-          <li key={gap.requirement} className="grid gap-0.5">
+        {items.map((gap, index) => (
+          <li key={`${index}-${gap.requirement}`} className="grid gap-0.5">
             <span className="text-sm font-medium">{gap.requirement}</span>
             <span className="text-muted-foreground text-xs">{gap.suggestion}</span>
           </li>
@@ -175,8 +174,8 @@ function ChipGroup({ title, items }: { title: string; items: string[] }) {
     <div className="grid content-start gap-2">
       <h3 className="text-sm font-semibold">{title}</h3>
       <ul className="flex flex-wrap gap-1">
-        {items.map((item) => (
-          <li key={item} className="bg-muted rounded-md px-2 py-0.5 text-xs">
+        {items.map((item, index) => (
+          <li key={`${index}-${item}`} className="bg-muted rounded-md px-2 py-0.5 text-xs">
             {item}
           </li>
         ))}

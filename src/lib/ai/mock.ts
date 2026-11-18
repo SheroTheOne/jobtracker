@@ -1,3 +1,4 @@
+import type { ProfileSuggestion } from "./extract-profile";
 import type { MatchAnalysis } from "./schemas/match-analysis";
 
 /**
@@ -53,5 +54,16 @@ export function createMockAnalysis(input: { cvText: string; role: string }): Mat
         "[Testläge] Här hamnar ett stycke till ditt personliga brev, skrivet utifrån ditt CV och annonsens viktigaste krav.",
       talkingPoints: ["[Testläge] Första poängen att lyfta", "[Testläge] Andra poängen", "[Testläge] Tredje poängen"],
     },
+  };
+}
+
+/** Exempelförslag för profilfält i testläge. */
+export function createMockProfileSuggestion(): ProfileSuggestion {
+  return {
+    fullName: "",
+    headline: "[Testläge] Utvecklare",
+    seniority: "MID",
+    coreSkills: ["TypeScript", "React"],
+    targetRoles: ["Utvecklare"],
   };
 }

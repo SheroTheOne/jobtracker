@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { IMPORTANCE, MATCH_STRENGTH } from "@/lib/domain/requirements";
 
 /**
  * Det strukturerade svar modellen MÅSTE returnera. Skickas som JSON Schema till
@@ -7,12 +8,6 @@ import { z } from "zod";
  * Håll schemat enkelt: Gemini stöder bara en delmängd av JSON Schema, så undvik
  * format-validering, unions och rekursion. Beskrivningarna styr modellen – de är en del av prompten.
  */
-
-export const IMPORTANCE = ["CRITICAL", "NICE_TO_HAVE"] as const;
-export type Importance = (typeof IMPORTANCE)[number];
-
-export const MATCH_STRENGTH = ["STRONG", "PARTIAL"] as const;
-export type MatchStrength = (typeof MATCH_STRENGTH)[number];
 
 const importance = z
   .enum(IMPORTANCE)

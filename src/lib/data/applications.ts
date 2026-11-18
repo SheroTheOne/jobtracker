@@ -1,10 +1,12 @@
 import "server-only";
 import { io } from "next/cache";
+import { cache } from "react";
 import { db } from "@/lib/db/client";
-import { Prisma } from "@/generated/prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
 import type { ApplicationStatus } from "@/generated/prisma/enums";
 import { deriveStatusChange, resolveInitialAppliedDate } from "@/lib/domain/status-change";
 import type { ApplicationInput } from "@/lib/validation/application";
+import { isUniqueConstraintViolation } from "./prisma-errors";
 
 // Läsningar anropar `await io()` först: better-sqlite3 är synkron, och med Cache Components
 // skulle resultatet annars bakas in i det statiska skalet vid prerender.
@@ -61,10 +63,11 @@ export async function countApplicationsByStatus(): Promise<Record<ApplicationSta
   return counts;
 }
 
-export async function getApplication(id: string) {
+/** Dedupliceras per request med React cache – sidan och dess paneler kan anropa den var för sig. */
+export const getApplication = cache(async (id: string) => {
   await io();
   return db.jobApplication.findUnique({ where: { id } });
-}
+});
 
 export type ApplicationDetail = NonNullable<Awaited<ReturnType<typeof getApplication>>>;
 
@@ -75,34 +78,41 @@ export async function createApplication(input: ApplicationInput) {
   });
 }
 
+// Statusändringar läser nuvarande status och skriver härledda fält. Läsning och skrivning sker
+// i samma transaktion, så att två samtidiga ändringar inte räknar på samma (inaktuella) status.
+
 /** Uppdatering via formuläret. Statusändringar får samma sidoeffekter som snabbändringen. */
 export async function updateApplication(id: string, input: ApplicationInput) {
-  const current = await db.jobApplication.findUniqueOrThrow({
-    where: { id },
-    select: { status: true, appliedDate: true },
-  });
-  const statusFields = deriveStatusChange({
-    from: current.status,
-    to: input.status,
-    appliedDate: input.appliedDate ?? current.appliedDate,
-  });
-  return db.jobApplication.update({
-    where: { id },
-    // Explicit angivet datum i formuläret vinner över det härledda.
-    data: { ...input, ...statusFields, appliedDate: input.appliedDate ?? statusFields.appliedDate ?? null },
-    select: { id: true },
+  return db.$transaction(async (tx) => {
+    const current = await tx.jobApplication.findUniqueOrThrow({
+      where: { id },
+      select: { status: true, appliedDate: true },
+    });
+    const statusFields = deriveStatusChange({
+      from: current.status,
+      to: input.status,
+      appliedDate: input.appliedDate ?? current.appliedDate,
+    });
+    return tx.jobApplication.update({
+      where: { id },
+      // Explicit angivet datum i formuläret vinner över det härledda.
+      data: { ...input, ...statusFields, appliedDate: input.appliedDate ?? statusFields.appliedDate ?? null },
+      select: { id: true },
+    });
   });
 }
 
 export async function changeApplicationStatus(id: string, status: ApplicationStatus) {
-  const current = await db.jobApplication.findUniqueOrThrow({
-    where: { id },
-    select: { status: true, appliedDate: true },
-  });
-  return db.jobApplication.update({
-    where: { id },
-    data: deriveStatusChange({ from: current.status, to: status, appliedDate: current.appliedDate }),
-    select: { id: true },
+  return db.$transaction(async (tx) => {
+    const current = await tx.jobApplication.findUniqueOrThrow({
+      where: { id },
+      select: { status: true, appliedDate: true },
+    });
+    return tx.jobApplication.update({
+      where: { id },
+      data: deriveStatusChange({ from: current.status, to: status, appliedDate: current.appliedDate }),
+      select: { id: true },
+    });
   });
 }
 
@@ -112,10 +122,6 @@ export async function logApplicationContact(id: string, at: Date = new Date()) {
 
 export async function deleteApplication(id: string) {
   return db.jobApplication.delete({ where: { id }, select: { id: true } });
-}
-
-export function isRecordNotFound(error: unknown): boolean {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025";
 }
 
 // ─── Import från externa källor ──────────────────────────────────────────────
@@ -147,7 +153,7 @@ export async function importApplication(input: ImportApplicationInput): Promise<
     const { id } = await db.jobApplication.create({ data: { ...input, status: "SAVED" }, select: { id: true } });
     return { id, created: true };
   } catch (error) {
-    if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
+    if (!isUniqueConstraintViolation(error)) throw error;
     const existing = await db.jobApplication.findUniqueOrThrow({
       where: { source_externalId: { source: input.source, externalId: input.externalId } },
       select: { id: true },

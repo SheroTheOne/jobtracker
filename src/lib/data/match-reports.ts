@@ -1,17 +1,12 @@
 import "server-only";
-import { createHash } from "node:crypto";
 import { io } from "next/cache";
 import { db } from "@/lib/db/client";
+import { hashCv } from "@/lib/domain/cv-fingerprint";
 import {
   MATCH_ANALYSIS_SCHEMA_VERSION,
   storedMatchAnalysisSchema,
   type StoredMatchAnalysis,
 } from "@/lib/ai/schemas/match-analysis";
-
-/** Fingeravtryck av CV-texten – avgör om en rapport baseras på ett äldre CV. */
-export function hashCv(cvText: string): string {
-  return createHash("sha256").update(cvText.trim()).digest("hex");
-}
 
 export type MatchReportView =
   | {
